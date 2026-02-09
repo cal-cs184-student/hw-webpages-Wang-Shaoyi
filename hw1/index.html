@@ -28,19 +28,19 @@
 	<body>
 		<div class="container">
 		<h1>CS184/284A Spring 2025 Homework 1 Write-Up</h1>
-		<div style="text-align: center;">Names: </div>
+		<div style="text-align: center;">Names: Shaoyi Wang, Tao Sun</div>
 
 		<br>
 
-		Link to webpage: (TODO) <a href="https://cs184.eecs.berkeley.edu/sp25">cs184.eecs.berkeley.edu/sp25</a>
+		Link to webpage: <a href="https://cs184.eecs.berkeley.edu/sp26/hw/hw1/">https://cs184.eecs.berkeley.edu/sp26/hw/hw1/</a>
 		
 		<br>
 
-		Link to GitHub repository: (TODO) <a href="https://cs184.eecs.berkeley.edu/sp25">cs184.eecs.berkeley.edu/sp25</a>
+		Link to GitHub repository: <a href="https://github.com/cal-cs184-student/hw1-rasterizer-arch">https://github.com/cal-cs184-student/hw1-rasterizer-arch</a>
 
 		<figure>
-			<img src="lion.jpg" alt="Lion" style="width:50%"/>
-			<figcaption>You can add images with captions!</figcaption>
+			<img src="img/cover.png" alt="cover" style="width:50%"/>
+			<figcaption>Rendering triangles</figcaption>
 		</figure>
 
 		<!--
@@ -51,36 +51,127 @@
 		Give a high-level overview of what you implemented in this homework. Think about what you've built as a whole. Share your thoughts on what interesting things you've learned from completing the homework.
 
 		<h2>Task 1: Drawing Single-Color Triangles</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		<h3>Explanation</h3>
+		<p>For Task 1, we rasterize a triangle by first computing its axis-aligned bounding box in screen space.
+		We take the minimum and maximum of the three vertex coordinates, convert them to an integer pixel range, and clamp the range to the framebuffer boundaries.</p>
 
-		<p>Here is an example 2x2 gridlike structure using an HTML table. Each <b>tr</b> is a row and each <b>td</b> is a column in that row. You might find this useful for framing and showing your result images in an organized fashion.</p>
+		<p>Next, we iterate over every pixel inside this <b>bounding box</b>. For each pixel, we test a single sample at
+		the <b>center</b> of the pixel. To check whether the sample lies inside the triangle,
+		we evaluate three <i>edge tests</i> (signed area / cross-product style tests) against the triangle's three
+		directed edges with \[ e = -(p_x - x_0)(y_1 - y_0) + (p_y - y_0)(x_1 - x_0) \] The sample is considered inside if all three test values are non-negative, or if all
+		three are non-positive. This makes the result independent of whether the input vertices are ordered
+		clockwise or counter-clockwise. If the sample is inside, we fill the triangle's color to that pixel; otherwise we leave the pixel unchanged.</p>
+
+		<h3>No worse than checking everything in the bounding box</h3>
+		This algorithm is <b>no worse</b> than one that checks every sample within the triangle's bounding box because
+		it does exactly that: it only visits pixels inside the smallest rectangle that fully contains the triangle,
+		and it performs a constant amount of work per visited pixel. It doesn't go over the entire framebuffer, and it does not do extra checks outside the bounding box, so its runtime matches the baseline bounding-box scanning approach up to constant factors.
+
+		<figure>
+			<img src="img/sample1.png" alt="cover" style="width:70%"/>
+			<figcaption><b>Rendering with default parameters</b>: the left corner of the red triangle looks separated.</figcaption>
+		</figure>
+
+		<h3>Extra credit: optimization</h3>
+		We implement a <b>scanline fill</b> optimization: Instead of checking every pixel in the bounding box,
+		we process the triangle <b>one row at a time</b>. For each pixel row, we find where that horizontal line
+		intersects the triangle's three edges with the given raster_line method, which typically produces two intersection x-coordinates. We then fill only the pixels whose centers lie between the left and right intersection points. This reduces the
+		number of pixel checks significantly:
+		<br><br>
 		<div style="display: flex; flex-direction: column; align-items: center;">
 			<table style="width: 100%; text-align: center; border-collapse: collapse;">
 			  <tr>
 				<td style="text-align: center;">
-				  <img src="lion.jpg" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				  <img src="img/before time.png" width="290px"/>
+				  <figcaption>Redering time for <em>test4.svg</em> before optimization.</figcaption>
 				</td>
 				<td style="text-align: center;">
-				  <img src="lion.jpg" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-			  </tr>
-			  <tr>
-				<td style="text-align: center;">
-				  <img src="lion.jpg" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-				<td style="text-align: center;">
-				  <img src="lion.jpg" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				  <img src="img/after time.png" width="300px"/>
+				  <figcaption>Redering time for <em>test4.svg</em> after optimization.</figcaption>
 				</td>
 			  </tr>
 			</table>
 		</div>
 		
 		<h2>Task 2: Antialiasing by Supersampling</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		<h3>Algorithm walkthrough</h3>
+		<p>
+		For Task 2, we implemented supersampling by modifying an intermediate
+		<code>sample_buffer</code> that stores multiple color samples for each output pixel. Each pixel is subdivided into a uniform grid of sub-pixels, and we store one color value per sub-pixel sample. Concretely, we allocate the buffer with
+		<code>width * height * sample_rate</code>, and the samples for pixel <code>(x, y)</code> occupy a contiguous block.
+		<br><br>
+		After all primitives have been rasterized into <code>sample_buffer</code>, we resolve the samples into the final framebuffer by averaging. For each output pixel <code>(x, y)</code>, we sum its sub-sample colors in
+		<code>sample_buffer</code> and divide by <code>sample_rate</code> to get the average pixel color, and then write the result into
+		<code>rgb_framebuffer_target</code> as 8-bit RGB values. This averaging step is implemented in
+		<code>resolve_to_framebuffer()</code>.
+		</p>
+
+		<h3>Why is supersampling useful?</h3>
+		<p>
+		Supersampling is useful because it reduces <b>aliasing</b> caused by taking only one sample per pixel.
+		Near triangle boundaries, a pixel can be partially inside or outside the triangle. By taking multiple
+		sub-pixel samples and averaging them, boundary pixels can produce intermediate colors,
+		which smooths the edge.
+		</p>
+
+		<h3>Modifications</h3>
+		<p>
+			<ul>
+			<li>
+				Updated <code>set_sample_rate</code> and <code>set_framebuffer_target</code> so <code>sample_buffer</code> is reallocated whenever <code>sample_rate</code>, <code>width</code>, or <code>height</code> changes.
+			</li>
+			<li>
+				Updated <code>rasterize_triangle</code> to perform supersampling: for each pixel in the triangle’s bounding box, we evaluate point-in-triangle tests at multiple sub-pixel sample locations and write covered sub-samples directly into
+				<code>sample_buffer</code>.
+			</li>
+			<li>
+				Updated <code>fill_pixel</code> to keep points and lines working under supersampling by filling all sub-samples of a pixel with the same color.
+			</li>
+			<li>
+				Updated <code>resolve_to_framebuffer</code> to downsample: for each output pixel, we average its <code>sample_rate</code> stored samples and write the resulting 8-bit RGB values into <code>rgb_framebuffer_target</code>.
+			</li>
+			</ul>
+		</p>
+
+		<h3>Antialiasing</h3>
+		<p>
+		With the above method, we antialias triangle edges by taking multiple samples within each pixel and averaging them to produce the final pixel color.
+		Pixels fully covered by the triangle remain solid, while boundary pixels become a blend of triangle and background colors,
+		which smooths out jagged edges.
+		</p>
+
+		<p>
+		<em> Points and lines still uses the default fill_pixel process without supersampling.</em>
+		</p>
+
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="img/sample1.png" width="500px"/>
+				  <figcaption>Sample rate 1.</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="img/sample4.png" width="500px"/>
+				  <figcaption>Sample rate 4.</figcaption>
+				</td>
+			  </tr>
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="img/sample9.png" width="500px"/>
+				  <figcaption>Sample rate 9.</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="img/sample16.png" width="500px"/>
+				  <figcaption>Sample rate 16.</figcaption>
+				</td>
+			  </tr>
+			</table>
+		</div>
+
+		<p><b>Explanation: </b>As the sample rate increases, the edges become smoother because more sub-pixel samples are averaged within each pixel. With more sub-samples, boundary pixels are only partially covered, so their averaged color becomes a blend of the shape and the background instead of a hard on/off step.</p>
+
+		<h3>Extra credit (TODO)</h3>
 
 		<h2>Task 3: Transforms</h2>
 		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
@@ -107,6 +198,34 @@
 				</ul>
 			</li>
 		</ul>
+
+
+		<p>Here is an example 2x2 gridlike structure using an HTML table. Each <b>tr</b> is a row and each <b>td</b> is a column in that row. You might find this useful for framing and showing your result images in an organized fashion.</p>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="lion.jpg" width="400px"/>
+				  <figcaption>Caption goes here.</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="lion.jpg" width="400px"/>
+				  <figcaption>Caption goes here.</figcaption>
+				</td>
+			  </tr>
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="lion.jpg" width="400px"/>
+				  <figcaption>Caption goes here.</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="lion.jpg" width="400px"/>
+				  <figcaption>Caption goes here.</figcaption>
+				</td>
+			  </tr>
+			</table>
+		</div>
+
 		</div>
 	</body>
 </html>
