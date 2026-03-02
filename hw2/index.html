@@ -292,9 +292,6 @@
 
 		<h4>Cube experiment</h4>
 		<p>On <code>dae/cube.dae</code>, repeated subdivision also makes the cube drift slightly away from perfect symmetry. The root cause is the initial triangulation: each quad already has a diagonal, and if those diagonals are not arranged symmetrically, the local neighborhoods are not symmetric either. Loop subdivision then keeps amplifying that small mismatch.</p>
-
-		<p>A simple fix is to preprocess the cube with edge flips, and optionally a few strategic edge splits, so corresponding faces share a more balanced triangulation pattern. Once the connectivity is symmetric, the repeated updates stay much more symmetric too.</p>
-
 		<figure>
 			<img src="images/P6b_1.png" alt="Cube before Loop subdivision" style="width:80%"/>
 			<figcaption>Cube before subdivision.</figcaption>
@@ -322,8 +319,45 @@
 			</figure>
 		</div>
 
+		<p>A simple fix is to preprocess the cube with edge flips, and optionally a few strategic edge splits, so corresponding faces share a more balanced triangulation pattern. Once the connectivity is symmetric, the repeated updates stay much more symmetric too.</p>
+
+
+		<div class="gallery two-up">
+			<figure>
+				<img src="images/6-6.png" alt="Cube after one Loop subdivision iteration"/>
+				<figcaption>Cube after flipping edges to make symmetrical.</figcaption>
+			</figure>
+			<figure>
+				<img src="images/6-7.png" alt="Cube after two Loop subdivision iterations"/>
+				<figcaption>After 1 iterations.</figcaption>
+			</figure>
+		</div>
+
+		<div class="gallery two-up">
+			<figure>
+				<img src="images/6-8.png" alt="Cube after three Loop subdivision iterations"/>
+				<figcaption>After 2 iterations.</figcaption> 
+			</figure>
+			<figure>
+				<img src="images/6-9.png" alt="Cube after four Loop subdivision iterations"/>
+				<figcaption>After 3 iterations.</figcaption>
+			</figure>
+		</div>
+
 		<h4>Boundary handling (extra credit)</h4>
 		<p>We also implemented the boundary version of Loop subdivision. Boundary vertices use the 1D boundary update rule, boundary edge points use simple midpoints, and the resulting surface stays stable near open borders instead of producing visible artifacts.</p>
+		
+		<div class="gallery two-up">
+			<figure>
+				<img src="images/6-10.png" alt="Before subdivision on boundary" height="240px"/>
+				<figcaption>Before subdivision on boundary.</figcaption>
+			</figure>
+			<figure>
+				<img src="images/6-11.png" alt="After subdivision on boundary" height="200px"/>
+				<figcaption>After subdivision on boundary.</figcaption>
+			</figure>
+		</div>
+
 
 		<h2>(Optional) Section III: Potential Extra Credit - Art Competition: Model something Creative</h2>
 		<p>We did not submit the art competition extra credit for this homework.</p>
