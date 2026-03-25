@@ -80,7 +80,7 @@
 		<div class="container">
 		<h1>CS184/284A Spring 2025 Homework 3 Write-Up</h1>
 		<h1>PathTracer</h1>
-		<div style="text-align: center;">Name: Shaoyi Wang</div>
+		<div style="text-align: center;">Name: Tao Sun, Shaoyi Wang</div>
 
 		<br>
 
@@ -131,7 +131,7 @@
 			<li>The closest intersection is used for shading. In this part, we visualized the results using normal shading for debugging.</li>
 		</ol>
 
-		<h4>Camera Ray Generation</h4>
+		<h4>Task 1: Camera Ray Generation</h4>
 		<p>
 			We implemented <code>Camera::generate_ray(x, y)</code> by mapping normalized image coordinates to the sensor plane using the camera field of view. If <code>hFov</code> and <code>vFov</code> are the horizontal and vertical field of view angles, then the half-width and half-height of the sensor plane are:
 		</p>
@@ -157,7 +157,7 @@
 			</figure>
 		</div>
 
-		<h4>Pixel Sampling</h4>
+		<h4>Task 2: Pixel Sampling</h4>
 		<p>
 			In <code>PathTracer::raytrace_pixel</code>, we sampled within each pixel and averaged the radiance estimates from all samples. For each sub-pixel sample (dx, dy), we computed normalized coordinates:
 		</p>
@@ -175,7 +175,7 @@
 
 		<hr>
 
-		<h3>Triangle Intersection Algorithm</h3>
+		<h3>Task 3: Triangle Intersection Algorithm</h3>
 		<p>
 			For triangle intersection, we implemented the Moller-Trumbore algorithm. We found this algorithm useful because it directly solves for the ray parameter t and the barycentric coordinates of the intersection point without first explicitly computing the triangle plane equation.
 		</p>
@@ -221,7 +221,7 @@
 
 		<hr>
 
-		<h3>Sphere Intersection</h3>
+		<h3>Task 4: Sphere Intersection</h3>
 		<p>
 			For sphere intersection, we substituted the ray equation into the implicit sphere equation. If the sphere center is c and radius is R, then points on the sphere satisfy:
 		</p>
@@ -486,6 +486,126 @@
 		<p>
 			With the same render settings (<code>-s 16</code>, <code>-l 8</code>, <code>-r 480 360</code>), uniform hemisphere sampling is visibly noisier than importance sampling because it wastes many samples on directions that never reach the area light. The result is a darker, grainier estimate of the bunny and its soft shadow, especially on the floor and around the lower silhouette. In contrast, light sampling concentrates work on directions that actually matter for direct illumination, so the penumbra is cleaner and the lighting is more stable at the same sample budget. In our runs, the hemisphere render traced about 7.35M BVH rays in 1.52s, while the importance-sampled render traced about 6.04M rays in 1.38s. The main improvement is not just speed, but sample efficiency: importance sampling puts computation where the light actually is.
 		</p>
+
+		<h2>Part 4: Global Illumination</h2>
+		<h3>Indirect Lighting Function Walkthrough</h3>
+		<h4>Recursive Bounce</h4>
+		<p>
+		We implement indirect lighting recursively in <code>at_least_one_bounce_radiance</code>. At each surface hit point, we spawn a new ray in a sampled bounce direction and trace it into the scene. If this new ray intersects another surface, we call <code>at_least_one_bounce_radiance</code> again at the next intersection point. The recursive call returns the radiance arriving from that bounce direction, and this returned radiance is then passed back to the current point. By repeating this process over successive intersections, we accumulate indirect illumination over multiple bounces until the path terminates.
+		</p>
+
+		<h4>Sampling</h4>
+		<p>
+		To sample the bounce direction, we first construct a local coordinate frame from the surface normal, so that the normal is aligned with the local <code>z</code>-axis. We convert the outgoing direction <code>w_out</code> into this local frame, and use <code>sample_f</code> to sample a new incoming direction <code>w_in</code>. This function returns the sampled direction, the BSDF value <code>f</code>, and the corresponding probability density <code>pdf</code>. Since <code>w_in</code> is sampled in the local frame, we transform it back to world space before spawning the next ray. The new ray starts from the current hit point with an <code>EPS_F</code> offset to avoid self-intersection, and its depth is decreased by one before recursion.
+		</p>
+
+		<h4>Monte Carlo Estimation</h4>
+		<p>
+		If the sampled ray hits another surface, we weight the recursively returned radiance using the Monte Carlo estimator <code>f(w_out, w_in) * L_i * cos(theta) / pdf</code>, where <code>L_i</code> is the radiance returned from the next bounce. This gives an unbiased estimate of the indirect lighting contribution from the sampled direction.
+		</p>
+
+		<h4>Russian Roulette</h4>
+		<p>
+		To reduce the cost of tracing very long paths, we use Russian Roulette to terminate deeper bounces with a fixed probability (termination probability = 0.35). After at least one indirect bounce is traced, we randomly decide whether to continue recursion. If the path survives, we divide the recursive contribution by the continuation probability. This keeps the estimator unbiased while improving efficiency.
+		</p>
+
+		<h3>Global Illumination Renders</h3>
+		Below are some images rendered with global (including both direct and indirect) illumination with 1024 samples per pixel:
+		<div class="image-row">
+			<figure>
+				<img src="images/p4_global_sphere.png" alt="l=1"/>
+			</figure>
+			<figure>
+				<img src="images/p4_global_bunny.png" alt="l=4"/>
+			</figure>
+		</div>
+
+		<div class="image-row">
+			<figure>
+				<img src="images/p4_global_bench.png" alt="l=16"/>
+			</figure>
+			<figure>
+				<img src="images/p4_global_blob.png" alt="l=64"/>
+			</figure>
+		</div>
+
+		<h3>Only Direct/Indirect Illumination</h3>
+		Taking the <code>/dae/sky/CBspheres_lambertian.dae</code> model, below shows the render of only direct illumination and only indirect illumination
+		<div class="image-row">
+			<figure>
+				<img src="images/p4_direct_sphere.png" alt="l=1"/>
+				<figcaption>direct illumination with 1024 samples per pixel</figcaption>
+			</figure>
+			<figure>
+				<img src="images/p4_indirect_sphere.png" alt="l=4"/>
+				<figcaption>indirect illumination with 1024 samples per pixel</figcaption>
+			</figure>
+		</div>
+
+		<h3>Comparison of <code>max_ray_depth</code> and <code>isAccumBounces</code></h3>
+		<table border="1" cellspacing="0" cellpadding="8" style="border-collapse: collapse; text-align: center;">
+		<tr>
+			<th>isAccumBounces</th>
+			<th>m=0</th>
+			<th>m=1</th>
+			<th>m=2</th>
+			<th>m=3</th>
+			<th>m=4</th>
+			<th>m=5</th>
+		</tr>
+
+		<tr>
+			<td></td>
+			<td><i>L<sub>e</sub></i></td>
+			<td><i>K(L<sub>e</sub>)</i></td>
+			<td><i>(K ∘ K)(L<sub>e</sub>)</i></td>
+			<td><i>(K ∘ K ∘ K)(L<sub>e</sub>)</i></td>
+			<td><i>(K ∘ K ∘ K ∘ K)(L<sub>e</sub>)</i></td>
+			<td><i>(K ∘ K ∘ K ∘ K ∘ K)(L<sub>e</sub>)</i></td>
+		</tr>
+
+		<tr>
+			<td>false</td>
+			<td><img src="images/p4_bunny_m0_false.png" width="160"></td>
+			<td><img src="images/p4_bunny_m1_false.png" width="160"></td>
+			<td><img src="images/p4_bunny_m2_false.png" width="160"></td>
+			<td><img src="images/p4_bunny_m3_false.png" width="160"></td>
+			<td><img src="images/p4_bunny_m4_false.png" width="160"></td>
+			<td><img src="images/p4_bunny_m5_false.png" width="160"></td>
+		</tr>
+
+		<tr>
+			<td></td>
+			<td><i>∑<sub>i=0</sub><sup>0</sup> K<sup>i</sup>(L<sub>e</sub>)</i></td>
+			<td><i>∑<sub>i=0</sub><sup>1</sup> K<sup>i</sup>(L<sub>e</sub>)</i></td>
+			<td><i>∑<sub>i=0</sub><sup>2</sup> K<sup>i</sup>(L<sub>e</sub>)</i></td>
+			<td><i>∑<sub>i=0</sub><sup>3</sup> K<sup>i</sup>(L<sub>e</sub>)</i></td>
+			<td><i>∑<sub>i=0</sub><sup>4</sup> K<sup>i</sup>(L<sub>e</sub>)</i></td>
+			<td><i>∑<sub>i=0</sub><sup>5</sup> K<sup>i</sup>(L<sub>e</sub>)</i></td>
+		</tr>
+
+		<tr>
+			<td>true</td>
+			<td><img src="images/p4_bunny_m0_true.png" width="160"></td>
+			<td><img src="images/p4_bunny_m1_true.png" width="160"></td>
+			<td><img src="images/p4_bunny_m2_true.png" width="160"></td>
+			<td><img src="images/p4_bunny_m3_true.png" width="160"></td>
+			<td><img src="images/p4_bunny_m4_true.png" width="160"></td>
+			<td><img src="images/p4_bunny_m5_true.png" width="160"></td>
+		</tr>
+		</table>
+		<p>
+		For <code>CBbunny.dae</code>, we rendered the scene with <code>max_ray_depth</code> set to 0, 1, 2, 3, 4, and 5 using <code>1024</code> samples per pixel. With <code>isAccumBounces=false</code>, each image shows only the contribution of the <i>m</i>th bounce. At <code>m=0</code>, only the light source is visible. At <code>m=1</code>, the image shows direct lighting only, which is similar to rasterization: surfaces are lit by the area light, but the result still looks harsh and lacks indirect illumination.
+		</p>
+
+		<p>
+		At the 2nd bounce (<code>m=2</code>), indirect lighting becomes visible. Light reflected from the colored walls starts to illuminate the bunny, floor, and back wall, producing soft color bleeding and reducing contrast. At the 3rd bounce (<code>m=3</code>), this effect continues, and the scene looks more evenly lit and more natural. Compared to rasterization, these higher-order bounces add global illumination effects such as interreflection and soft indirect light, which make the rendered image more realistic.
+		</p>
+
+		<p>
+		Comparing accumulated and unaccumulated bounces, the unaccumulated images isolate the contribution of each individual bounce, while the accumulated images sum all bounces up to <i>m</i>. As <code>max_ray_depth</code> increases, the accumulated result becomes brighter and more realistic. Most of the visual improvement appears in the first few bounces, while later bounces make smaller changes.
+		</p>
+
 
 		</div>
 	</body>
