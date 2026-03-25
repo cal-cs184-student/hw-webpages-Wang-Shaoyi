@@ -87,8 +87,8 @@
 		<p>Link to webpage: <a href="https://cal-cs184-student.github.io/hw-webpages-Wang-Shaoyi/hw3/index.html">https://cal-cs184-student.github.io/hw-webpages-Wang-Shaoyi/hw3/index.html</a></p>
 
 		<figure>
-			<img src="images/p3_bunny_importance.png" alt="Cornell Box with Bunny" style="width:70%"/>
-			<figcaption>Rendered Cornell Box with Bunny using importance sampling</figcaption>
+			<img src="images/p4_rr_m100.png" alt="Cornell Box with Bunny" style="width:70%"/>
+			<figcaption>Rendered Cornell Box with Bunny using global illuminance</figcaption>
 		</figure>
 
 		<h2>Overview</h2>
@@ -100,6 +100,12 @@
 		</p>
 		<p>
 			Part 3 introduced direct illumination, where we implemented both uniform hemisphere sampling and importance sampling of lights. We learned that importance sampling converges much faster by directing samples toward actual light sources rather than random directions.
+		</p>
+		<p>
+		Part 4 builds up indirect illumination, making multiple light bounces possible. Combined with the direct illumination implemented in Part 3, this introduces global illumination effects such as softer shading, brighter shadowed regions, and color bleeding between nearby objects and walls, produces much more realistic images. 
+		</p>
+		<p>
+			Part 5 is about adaptive sampling. Adaptive sampling improves rendering efficiency by using more samples in high-variance regions and fewer samples in already converged areas.
 		</p>
 		<p>
 			Through this homework, we gained a deep appreciation for how ray tracing connects mathematical concepts like geometric intersection, Monte Carlo integration, and importance sampling into a unified rendering framework. The most interesting insight was seeing how each component builds on the previous ones: accurate intersections enable correct visibility, BVH makes rendering feasible, and smart sampling strategies make it efficient.
@@ -513,19 +519,19 @@
 		Below are some images rendered with global (including both direct and indirect) illumination with 1024 samples per pixel:
 		<div class="image-row">
 			<figure>
-				<img src="images/p4_global_sphere.png" alt="l=1"/>
+				<img src="images/p4_global_sphere.png" alt="l=1" style="width:80%"/>
 			</figure>
 			<figure>
-				<img src="images/p4_global_bunny.png" alt="l=4"/>
+				<img src="images/p4_global_bunny.png" alt="l=4" style="width:80%"/>
 			</figure>
 		</div>
 
 		<div class="image-row">
 			<figure>
-				<img src="images/p4_global_bench.png" alt="l=16"/>
+				<img src="images/p4_global_bench.png" alt="l=16" style="width:80%"/>
 			</figure>
 			<figure>
-				<img src="images/p4_global_blob.png" alt="l=64"/>
+				<img src="images/p4_global_blob.png" alt="l=64" style="width:80%"/>
 			</figure>
 		</div>
 
@@ -533,11 +539,11 @@
 		Taking the <code>/dae/sky/CBspheres_lambertian.dae</code> model, below shows the render of only direct illumination and only indirect illumination
 		<div class="image-row">
 			<figure>
-				<img src="images/p4_direct_sphere.png" alt="l=1"/>
+				<img src="images/p4_direct_sphere.png" alt="l=1" style="width:80%"/>
 				<figcaption>direct illumination with 1024 samples per pixel</figcaption>
 			</figure>
 			<figure>
-				<img src="images/p4_indirect_sphere.png" alt="l=4"/>
+				<img src="images/p4_indirect_sphere.png" alt="l=4" style="width:80%"/>
 				<figcaption>indirect illumination with 1024 samples per pixel</figcaption>
 			</figure>
 		</div>
@@ -606,6 +612,115 @@
 		Comparing accumulated and unaccumulated bounces, the unaccumulated images isolate the contribution of each individual bounce, while the accumulated images sum all bounces up to <i>m</i>. As <code>max_ray_depth</code> increases, the accumulated result becomes brighter and more realistic. Most of the visual improvement appears in the first few bounces, while later bounces make smaller changes.
 		</p>
 
+		<h3>Russian Roulette Rendering</h3>
+
+		<div class="image-row">
+			<figure>
+				<img src="images/p4_rr_m0.png" alt="l=16" style="width:80%"/>
+				<figcaption><code>max_ray_depth = 0</code></figcaption>
+			</figure>
+			<figure>
+				<img src="images/p4_rr_m1.png" alt="l=64" style="width:80%"/>
+				<figcaption><code>max_ray_depth = 1</code></figcaption>
+			</figure>
+		</div>
+		<div class="image-row">
+			<figure>
+				<img src="images/p4_rr_m2.png" alt="l=16" style="width:80%"/>
+				<figcaption><code>max_ray_depth = 2</code></figcaption>
+			</figure>
+			<figure>
+				<img src="images/p4_rr_m3.png" alt="l=64" style="width:80%"/>
+				<figcaption><code>max_ray_depth = 3</code></figcaption>
+			</figure>
+		</div>
+		<div class="image-row">
+			<figure>
+				<img src="images/p4_rr_m4.png" alt="l=16" style="width:80%"/>
+				<figcaption><code>max_ray_depth = 4</code></figcaption>
+			</figure>
+			<figure>
+				<img src="images/p4_rr_m100.png" alt="l=64" style="width:80%"/>
+				<figcaption><code>max_ray_depth = 100</code></figcaption>
+			</figure>
+		</div>
+
+		<p>
+		For <code>CBbunny.dae</code>, increasing <code>max_ray_depth</code> allows more indirect light bounces to contribute to the rendered image. At <code>m=0</code>, only emitted light is visible, so the scene is almost completely black except for the light source. At <code>m=1</code>, the image contains only direct lighting. At <code>m=2</code>, the first indirect bounce appears, making the scene much brighter and introducing visible interreflection and color bleeding from the colored walls. From <code>m=3</code> to <code>m=4</code>, the lighting becomes slightly softer and more balanced, but the changes are much smaller than the jump from <code>m=1</code> to <code>m=2</code>. By <code>m=100</code>, the result looks very similar to the lower accumulated-depth images, which is consistent with Russian Roulette: long light paths are randomly terminated to reduce computation, while a compensation factor keeps the estimator unbiased, so very deep bounces contribute only small visual refinements and do not significantly change the final appearance.
+		</p>
+
+		<h3>Compare Sample-per-pixel Rates</h3>
+		We picked <code>/dae/sky/bunny.dae</code> as the example and compare various sample-per-pixel rates as below (using 4 light rays):
+				<div class="image-row">
+			<figure>
+				<img src="images/p4_sample_1.png" alt="l=16" style="width:80%"/>
+				<figcaption>sample-per-pixel rate = 1</figcaption>
+			</figure>
+			<figure>
+				<img src="images/p4_sample_2.png" alt="l=64" style="width:80%"/>
+				<figcaption>sample-per-pixel rate = 2</figcaption>
+			</figure>
+		</div>
+		<div class="image-row">
+			<figure>
+				<img src="images/p4_sample_4.png" alt="l=16" style="width:80%"/>
+				<figcaption>sample-per-pixel rate = 4</figcaption>
+			</figure>
+			<figure>
+				<img src="images/p4_sample_8.png" alt="l=64" style="width:80%"/>
+				<figcaption>sample-per-pixel rate = 8</figcaption>
+			</figure>
+		</div>
+		<div class="image-row">
+			<figure>
+				<img src="images/p4_sample_16.png" alt="l=16" style="width:80%"/>
+				<figcaption>sample-per-pixel rate = 16</figcaption>
+			</figure>
+			<figure>
+				<img src="images/p4_sample_64.png" alt="l=64" style="width:80%"/>
+				<figcaption>sample-per-pixel rate = 64</figcaption>
+			</figure>
+		</div>
+		<figure>
+				<img src="images/p4_sample_1024.png" alt="l=64" style="width:60%"/>
+				<figcaption>sample-per-pixel rate = 1024</figcaption>
+		</figure>
+		When the sample-per-pixel rate is low, the render result is noisy; with sample-per-pixel rate = 64, the image looks consistent; with sample-per-pixel rate = 1024, the result is smoother compared to lower samling rates.
+
+		<h2>Part 5: Adaptive Sampling</h2>
+		<h3>Adaptive Sampling Explanation</h3>
+		<p>
+		In our implementation, each pixel can take at most <code>ns_aa</code> samples. While sampling, we keep track of the accumulated radiance as well as two running statistics, <code>s1</code> and <code>s2</code>, which store the sum of sample illuminance values and the sum of squared illuminance values. This lets us estimate the mean and variance of the pixel samples without storing every individual sample.
+		</p>
+
+		<p>
+		Every <code>samplesPerBatch</code> samples, we check whether the pixel has converged. We compute the sample mean as <code>μ = s1 / n</code> and the variance as <code>σ² = (1 / (n - 1)) (s2 - s1² / n)</code>. We then compute the confidence interval half-width <code>I = 1.96 * σ / sqrt(n)</code>, which measures the uncertainty of the current estimate. If <code>I &lt;= maxTolerance * μ</code>, we consider the pixel converged and stop taking more samples. Otherwise, sampling continues until the pixel converges or reaches the maximum sample count. After sampling finishes, we divide the accumulated radiance by the actual number of samples used and write the averaged result to the sample buffer.
+		</p>
+
+		<h3>Adaptive Sampling Renders</h3>
+		<p>
+		These results show that adaptive sampling allocates samples unevenly according to local variance in the image. In both scenes, bright and uniform regions, such as large flat background areas, converge quickly and therefore use fewer samples, which appear in cooler colors in the sample rate images. In contrast, visually complex or dim regions such as object boundaries, detailed geometry, shadow transitions, and areas with stronger indirect lighting require more samples to converge, so they appear in warmer colors. This behavior is clearly visible in the bunny scene around the rabbit silhouette, the contact shadow, and the wall transitions, and in the wall-e scene around the robot's detailed edges and small geometric features. The rendered results are visually clean, while the sampling rate images confirm that adaptive sampling concentrates computation on difficult regions and avoids oversampling simpler parts of the image.
+		</p>
+		<div class="image-row">
+			<figure>
+				<img src="images/p5_bunny.png" alt="l=16" style="width:80%"/>
+				<figcaption>render results of <code>CBbunny.dae</code></figcaption>
+			</figure>
+			<figure>
+				<img src="images/p5_bunny_rate.png" alt="l=64" style="width:80%"/>
+				<figcaption>sample rate of <code>CBbunny.dae</code></figcaption>
+			</figure>
+		</div>
+		<div class="image-row">
+			<figure>
+				<img src="images/p5_wall.png" alt="l=16" style="width:80%"/>
+				<figcaption>render results of <code>wall-e.dae</code></figcaption>
+			</figure>
+			<figure>
+				<img src="images/p5_wall_rate.png" alt="l=64" style="width:80%"/>
+				<figcaption>sample rate of <code>wall-e.dae</code></figcaption>
+			</figure>
+		</div>
 
 		</div>
 	</body>
